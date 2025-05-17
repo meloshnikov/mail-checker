@@ -1,6 +1,5 @@
-import { authorize, removeToken, isAuthorized } from './auth';
-import { updateUnreadCount, getAccounts, removeAccount, openGmail } from './gmail-api';
-import { MessageType, StoredAccount, Settings, ConnectionStatus } from '../types';
+import { MessageType, StoredAccount, Settings, GmailMessageDetail } from '../types';
+import EmailProviderFactory, { GmailProvider } from '../providers';
 
 // Настройки по умолчанию
 const DEFAULT_SETTINGS: Settings = {
@@ -8,29 +7,27 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 // Имя для планировщика обновлений
-const UPDATE_ALARM_NAME = 'gmail-unread-counter-update';
+const UPDATE_ALARM_NAME = 'email-checker-update';
+
+// Ключ для хранения аккаунтов в storage.local
+const ACCOUNTS_STORAGE_KEY = 'email_accounts';
 
 /**
  * Инициализация расширения
  */
 async function initialize(): Promise<void> {
   try {
+    console.log('Initializing extension');
+    
     // Загружаем настройки
     const settings = await loadSettings();
+    console.log('Settings loaded:', settings);
     
     // Устанавливаем планировщик обновлений
     setupUpdateAlarm(settings.updateInterval);
     
-    // Проверяем авторизацию
-    const authorized = await isAuthorized();
-    
-    if (authorized) {
-      // Если пользователь авторизован, обновляем данные
-      await updateBadge();
-    } else {
-      // Если пользователь не авторизован, устанавливаем значок по умолчанию
-      setBadgeDefault();
-    }
+    // Обновляем данные
+    await updateBadge();
   } catch (error: unknown) {
     console.error('Initialization error:', error);
     setBadgeError();
@@ -41,7 +38,9 @@ async function initialize(): Promise<void> {
  * Загрузка настроек
  */
 async function loadSettings(): Promise<Settings> {
+  console.log('Loading settings from storage');
   const data = await browser.storage.local.get('settings');
+  console.log('Settings from storage:', data.settings);
   return data.settings || DEFAULT_SETTINGS;
 }
 
@@ -49,6 +48,7 @@ async function loadSettings(): Promise<Settings> {
  * Сохранение настроек
  */
 async function saveSettings(settings: Settings): Promise<void> {
+  console.log('Saving settings to storage:', settings);
   await browser.storage.local.set({ settings });
   
   // Обновляем планировщик с новыми настройками
@@ -59,13 +59,174 @@ async function saveSettings(settings: Settings): Promise<void> {
  * Настройка планировщика обновлений
  */
 function setupUpdateAlarm(intervalMinutes: number): void {
+  console.log('Setting up update alarm with interval:', intervalMinutes);
   // Удаляем существующий планировщик, если он есть
   browser.alarms.clear(UPDATE_ALARM_NAME).then(() => {
     // Создаем новый планировщик
     browser.alarms.create(UPDATE_ALARM_NAME, {
       periodInMinutes: intervalMinutes,
     });
+    console.log('Update alarm created');
   });
+}
+
+/**
+ * Получение всех аккаунтов из storage.local
+ */
+async function getAccounts(): Promise<StoredAccount[]> {
+  console.log('Getting accounts from storage');
+  const data = await browser.storage.local.get(ACCOUNTS_STORAGE_KEY);
+  const accounts = data[ACCOUNTS_STORAGE_KEY] || [];
+  console.log('Accounts from storage:', accounts);
+  return accounts;
+}
+
+/**
+ * Сохранение аккаунтов в storage.local
+ */
+async function saveAccounts(accounts: StoredAccount[]): Promise<void> {
+  console.log('Saving accounts to storage:', accounts);
+  await browser.storage.local.set({ [ACCOUNTS_STORAGE_KEY]: accounts });
+}
+
+/**
+ * Добавление или обновление аккаунта
+ */
+async function updateAccount(account: StoredAccount): Promise<StoredAccount[]> {
+  console.log('Updating account:', account);
+  
+  // Получаем текущие аккаунты
+  const accounts = await getAccounts();
+  
+  // Ищем аккаунт с таким же email
+  const index = accounts.findIndex((account) => account.email === account.email);
+  
+  if (index >= 0) {
+    // Обновляем существующий аккаунт
+    accounts[index] = account;
+  } else {
+    // Добавляем новый аккаунт
+    accounts.push(account);
+  }
+  
+  // Сохраняем обновленные аккаунты
+  await saveAccounts(accounts);
+  
+  return accounts;
+}
+
+/**
+ * Удаление аккаунта
+ */
+async function removeAccount(email: string): Promise<StoredAccount[]> {
+  console.log('Removing account:', email);
+  
+  // Получаем текущие аккаунты
+  const accounts = await getAccounts();
+  
+  // Удаляем аккаунт с указанным email
+  const updatedAccounts = accounts.filter(a => a.email !== email);
+  
+  // Сохраняем обновленные аккаунты
+  await saveAccounts(updatedAccounts);
+  
+  return updatedAccounts;
+}
+
+/**
+ * Обновление данных для всех аккаунтов
+ */
+async function updateAllAccounts(): Promise<StoredAccount[]> {
+  console.log('Updating all accounts');
+  
+  // Получаем текущие аккаунты
+  const accounts = await getAccounts();
+  
+  if (accounts.length === 0) {
+    console.log('No accounts to update');
+    return [];
+  }
+  
+  // Обновляем данные для каждого аккаунта
+  const updatedAccounts: StoredAccount[] = [];
+  
+  for (const account of accounts) {
+    try {
+      console.log(`Updating account: ${account.email} (${account.providerId})`);
+      
+      // Получаем провайдер для аккаунта
+      const provider = EmailProviderFactory.getProvider(account.providerId);
+      
+      if (!provider) {
+        console.error(`Provider not found for account: ${account.email} (${account.providerId})`);
+        continue;
+      }
+      
+      // Проверяем авторизацию
+      const authorized = await provider.isAuthorized();
+      
+      if (!authorized) {
+        console.log(`Account not authorized: ${account.email} (${account.providerId})`);
+        continue;
+      }
+
+      let updatedAccount: StoredAccount;
+
+      if (account.providerId === 'gmail') {
+        console.log(`Updating Gmail account using history: ${account.email}`);
+        const gmailProvider = provider as GmailProvider; // Приводим тип для доступа к новым методам
+
+        // Получаем последний сохраненный historyId для этого аккаунта
+        const lastHistoryId = await gmailProvider.getLastHistoryId();
+        console.log(`Last history ID for ${account.email}:`, lastHistoryId);
+
+        // Получаем историю изменений с последнего historyId
+        const historyResult = await gmailProvider.getHistory(lastHistoryId);
+        console.log(`History result for ${account.email}:`, historyResult);
+
+        // Обрабатываем новые сообщения
+        const newMessages: GmailMessageDetail[] = [];
+        for (const messageId of historyResult.messages.map((msg: { id: string }) => msg.id)) {
+          try {
+            console.log(`Fetching message: ${messageId}`);
+            const message = await gmailProvider.getMessage(messageId);
+            newMessages.push(message);
+            console.log(`Fetched message: ${messageId}`, message);
+          } catch (messageError) {
+            console.error(`Error fetching message ${messageId}:`, messageError);
+          }
+        }
+
+        // Обновляем аккаунт с новыми сообщениями и historyId
+        updatedAccount = {
+          ...account,
+          unreadCount: newMessages.length, // Количество новых непрочитанных сообщений
+          lastHistoryId: historyResult.historyId,
+          unreadMessages: newMessages, // Сохраняем список новых сообщений
+        };
+
+        // Сохраняем новый historyId
+        await gmailProvider.saveLastHistoryId(historyResult.historyId);
+
+      } else {
+        // Для других провайдеров используем старый метод
+        console.log(`Updating account using updateUnreadCount: ${account.email} (${account.providerId})`);
+        updatedAccount = await provider.updateUnreadCount();
+      }
+
+      updatedAccounts.push(updatedAccount);
+
+    } catch (error) {
+      console.error(`Error updating account ${account.email}:`, error);
+      // If an error occurs, keep the original account data
+      updatedAccounts.push(account);
+    }
+  }
+
+  // Сохраняем обновленные аккаунты
+  await saveAccounts(updatedAccounts);
+
+  return updatedAccounts;
 }
 
 /**
@@ -73,32 +234,26 @@ function setupUpdateAlarm(intervalMinutes: number): void {
  */
 async function updateBadge(): Promise<void> {
   try {
-    // Проверяем авторизацию
-    const authorized = await isAuthorized();
+    console.log('Updating badge');
     
-    if (!authorized) {
-      setBadgeDefault();
-      return;
-    }
-    
-    // Обновляем данные
-    await updateUnreadCount();
-    
-    // Получаем все аккаунты
-    const accounts = await getAccounts();
+    // Обновляем данные для всех аккаунтов
+    const accounts = await updateAllAccounts();
     
     if (accounts.length === 0) {
+      console.log('No accounts found, setting default badge');
       setBadgeDefault();
       return;
     }
     
     // Суммируем количество непрочитанных писем
     const totalUnread = accounts.reduce((sum, account) => sum + account.unreadCount, 0);
+    console.log('Total unread count:', totalUnread);
     
     // Устанавливаем значок
     setBadgeCount(totalUnread);
     
     // Отправляем сообщение в popup
+    console.log('Sending UPDATE_COMPLETE message with accounts:', accounts);
     browser.runtime.sendMessage({
       type: MessageType.UPDATE_COMPLETE,
       payload: {
@@ -120,9 +275,91 @@ async function updateBadge(): Promise<void> {
 }
 
 /**
+ * Авторизация аккаунта
+ */
+async function authorizeAccount(providerId: string): Promise<StoredAccount> {
+  console.log(`Authorizing account for provider: ${providerId}`);
+  
+  // Получаем провайдер
+  const provider = EmailProviderFactory.getProvider(providerId);
+  
+  if (!provider) {
+    throw new Error(`Provider not found: ${providerId}`);
+  }
+  
+  // Авторизуем пользователя
+  await provider.authorize();
+  
+  // Обновляем данные
+  const account = await provider.updateUnreadCount();
+  
+  // Сохраняем аккаунт
+  await updateAccount(account);
+  
+  return account;
+}
+
+/**
+ * Выход из аккаунта
+ */
+async function logoutAccount(email: string): Promise<void> {
+  console.log(`Logging out account: ${email}`);
+  
+  // Получаем аккаунт
+  const accounts = await getAccounts();
+  const account = accounts.find(a => a.email === email);
+  
+  if (!account) {
+    throw new Error(`Account not found: ${email}`);
+  }
+  
+  // Получаем провайдер
+  const provider = EmailProviderFactory.getProvider(account.providerId);
+  
+  if (!provider) {
+    throw new Error(`Provider not found: ${account.providerId}`);
+  }
+  
+  // Выходим из аккаунта
+  await provider.logout();
+  
+  // Удаляем аккаунт из хранилища
+  await removeAccount(email);
+}
+
+/**
+ * Открытие почтового ящика
+ */
+function openMail(email: string): void {
+  console.log(`Opening mail for: ${email}`);
+  
+  // Получаем аккаунты
+  getAccounts().then(accounts => {
+    const account = accounts.find(a => a.email === email);
+    
+    if (!account) {
+      console.error(`Account not found: ${email}`);
+      return;
+    }
+    
+    // Получаем провайдер
+    const provider = EmailProviderFactory.getProvider(account.providerId);
+    
+    if (!provider) {
+      console.error(`Provider not found: ${account.providerId}`);
+      return;
+    }
+    
+    // Открываем почтовый ящик
+    provider.openMail(email);
+  });
+}
+
+/**
  * Установка значка с количеством непрочитанных писем
  */
 function setBadgeCount(count: number): void {
+  console.log('Setting badge count:', count);
   // Устанавливаем текст значка
   browser.browserAction.setBadgeText({
     text: count > 0 ? count.toString() : '',
@@ -138,6 +375,7 @@ function setBadgeCount(count: number): void {
  * Установка значка по умолчанию (без непрочитанных писем)
  */
 function setBadgeDefault(): void {
+  console.log('Setting default badge');
   browser.browserAction.setBadgeText({
     text: '',
   });
@@ -151,6 +389,7 @@ function setBadgeDefault(): void {
  * Установка значка ошибки
  */
 function setBadgeError(): void {
+  console.log('Setting error badge');
   browser.browserAction.setBadgeText({
     text: '!',
   });
@@ -164,14 +403,27 @@ function setBadgeError(): void {
  * Обработчик сообщений от popup
  */
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('Message received in background:', message);
+  
   switch (message.type) {
     case MessageType.AUTH_REQUEST:
       // Запрос на авторизацию
-      authorize()
-        .then(() => updateBadge())
-        .then(() => {
-          browser.runtime.sendMessage({
-            type: MessageType.AUTH_COMPLETE,
+      console.log('Received AUTH_REQUEST message');
+      const providerId = message.payload?.providerId || 'gmail'; // По умолчанию Gmail
+      
+      authorizeAccount(providerId)
+        .then(account => {
+          console.log('Authorization successful, account:', account);
+          
+          // Обновляем значок
+          updateBadge().then(() => {
+            // Отправляем сообщение об успешной авторизации
+            browser.runtime.sendMessage({
+              type: MessageType.AUTH_COMPLETE,
+              payload: {
+                account,
+              },
+            });
           });
         })
         .catch((error: unknown) => {
@@ -187,16 +439,30 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
     case MessageType.LOGOUT_REQUEST:
       // Запрос на выход из аккаунта
+      console.log('Received LOGOUT_REQUEST message');
       const email = message.payload?.email;
       
-      Promise.all([
-        removeToken(),
-        email ? removeAccount(email) : Promise.resolve(),
-      ])
+      if (!email) {
+        console.error('No email provided for logout');
+        browser.runtime.sendMessage({
+          type: MessageType.ERROR,
+          payload: {
+            message: 'No email provided for logout',
+          },
+        });
+        break;
+      }
+      
+      logoutAccount(email)
         .then(() => {
-          setBadgeDefault();
-          browser.runtime.sendMessage({
-            type: MessageType.LOGOUT_COMPLETE,
+          console.log('Logout successful');
+          
+          // Обновляем значок
+          updateBadge().then(() => {
+            // Отправляем сообщение об успешном выходе
+            browser.runtime.sendMessage({
+              type: MessageType.LOGOUT_COMPLETE,
+            });
           });
         })
         .catch((error: unknown) => {
@@ -210,9 +476,33 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
       break;
       
+    case MessageType.OPEN_MAIL_REQUEST:
+      // Запрос на открытие почтового ящика
+      console.log('Received OPEN_MAIL_REQUEST message');
+      const mailEmail = message.payload?.email;
+      
+      if (!mailEmail) {
+        console.error('No email provided for opening mail');
+        browser.runtime.sendMessage({
+          type: MessageType.ERROR,
+          payload: {
+            message: 'No email provided for opening mail',
+          },
+        });
+        break;
+      }
+      
+      // Открываем почтовый ящик
+      openMail(mailEmail);
+      break;
+      
     case MessageType.REQUEST_UPDATE:
       // Запрос на обновление данных
+      console.log('Received REQUEST_UPDATE message');
       updateBadge()
+        .then(() => {
+          console.log('Badge updated successfully');
+        })
         .catch((error: unknown) => {
           console.error('Update error:', error);
           browser.runtime.sendMessage({
@@ -233,18 +523,26 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
  * Обработчик нажатия на значок расширения
  */
 browser.browserAction.onClicked.addListener(() => {
-  // Если popup не настроен, открываем Gmail
-  openGmail();
+  console.log('Browser action clicked');
+  // Если popup не настроен, открываем первый аккаунт
+  getAccounts().then(accounts => {
+    if (accounts.length > 0) {
+      openMail(accounts[0].email);
+    }
+  });
 });
 
 /**
  * Обработчик срабатывания планировщика
  */
 browser.alarms.onAlarm.addListener(alarm => {
+  console.log('Alarm triggered:', alarm.name);
   if (alarm.name === UPDATE_ALARM_NAME) {
+    console.log('Update alarm triggered, updating badge');
     updateBadge();
   }
 });
 
 // Инициализация расширения при запуске
+console.log('Background script loaded, initializing extension');
 initialize();

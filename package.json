@@ -1,6 +1,6 @@
 {
-  "name": "mail-checker",
-  "version": "1.0.1",
+  "name": "email-checker",
+  "version": "1.1.0",
   "description": "",
   "main": "index.js",
   "scripts": {

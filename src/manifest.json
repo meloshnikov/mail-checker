@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
-  "name": "Gmail Unread Counter",
-  "version": "1.0.0",
-  "description": "Отображает количество непрочитанных писем в Gmail",
+  "name": "Email checker",
+  "version": "1.1.0",
+  "description": "Отображает количество непрочитанных писем",
   "icons": {
     "48": "assets/icon-48.png",
     "96": "assets/icon-96.png"
@@ -11,14 +11,26 @@
     "identity",
     "storage",
     "alarms",
-    "https://www.googleapis.com/*"
+    "https://www.googleapis.com/*",
+    "https://accounts.google.com/*",
+    "https://oauth2.googleapis.com/*",
+    "https://oauth.yandex.ru/*",
+    "https://login.yandex.ru/*",
+    "https://mail.yandex.ru/*"
+  ],
+  "host_permissions": [
+    "https://mail.google.com/",
+    "https://mail.yandex.ru/"
+  ],
+  "optional_host_permissions": [
+    "https://*.googleusercontent.com/"
   ],
   "browser_action": {
     "default_icon": {
       "16": "assets/icon-16.png",
       "32": "assets/icon-32.png"
     },
-    "default_title": "Gmail Unread Counter",
+    "default_title": "Email checker",
     "default_popup": "popup/index.html"
   },
   "background": {
@@ -26,12 +38,12 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "gmail-unread-counter@example.com"
+      "id": "email-checker@example.com"
     }
   },
   "applications": {
     "gecko": {
-      "id": "gmail-unread-counter@example.com"
+      "id": "email-checker@example.com"
     }
   }
 }

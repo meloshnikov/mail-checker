@@ -11,6 +11,45 @@ export interface GmailListMessagesResponse {
   resultSizeEstimate: number;
 }
 
+// Типы для детальной информации о сообщении
+export interface GmailMessageHeader {
+  name: string;
+  value: string;
+}
+
+export interface GmailMessagePart {
+  partId: string;
+  mimeType: string;
+  filename: string;
+  headers: GmailMessageHeader[];
+  body: {
+    size: number;
+    data?: string; // Base64Url encoded data
+  };
+  parts?: GmailMessagePart[]; // Для multipart сообщений
+}
+
+export interface GmailMessagePayload {
+  partId: string;
+  mimeType: string;
+  filename: string;
+  headers: GmailMessageHeader[];
+  body: {
+    size: number;
+    data?: string; // Base64Url encoded data
+  };
+  parts?: GmailMessagePart[];
+}
+
+export interface GmailMessageDetail {
+  id: string;
+  threadId: string;
+  snippet: string;
+  payload: GmailMessagePayload;
+  labelIds: string[];
+}
+
+
 // Типы для работы с аутентификацией
 export interface AuthToken {
   accessToken: string;
@@ -20,9 +59,12 @@ export interface AuthToken {
 
 // Типы для хранения данных
 export interface StoredAccount {
+  providerId: string; // Идентификатор провайдера
   email: string;
   unreadCount: number;
   lastUpdated: number;
+  lastHistoryId?: string; // Для Gmail: последний обработанный historyId
+  unreadMessages?: GmailMessageDetail[]; // Для Gmail: список непрочитанных сообщений
 }
 
 // Типы для сообщений между background и popup
@@ -33,6 +75,7 @@ export enum MessageType {
   AUTH_COMPLETE = 'AUTH_COMPLETE',
   LOGOUT_REQUEST = 'LOGOUT_REQUEST',
   LOGOUT_COMPLETE = 'LOGOUT_COMPLETE',
+  OPEN_MAIL_REQUEST = 'OPEN_MAIL_REQUEST',
   ERROR = 'ERROR'
 }
 
@@ -45,6 +88,13 @@ export interface UpdateCompleteMessage extends Message {
   type: MessageType.UPDATE_COMPLETE;
   payload: {
     accounts: StoredAccount[];
+  };
+}
+
+export interface AuthCompleteMessage extends Message {
+  type: MessageType.AUTH_COMPLETE;
+  payload: {
+    account: StoredAccount;
   };
 }
 
