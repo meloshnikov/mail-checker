@@ -1,0 +1,37 @@
+{
+  "manifest_version": 2,
+  "name": "Gmail Unread Counter",
+  "version": "1.0.0",
+  "description": "Отображает количество непрочитанных писем в Gmail",
+  "icons": {
+    "48": "assets/icon-48.png",
+    "96": "assets/icon-96.png"
+  },
+  "permissions": [
+    "identity",
+    "storage",
+    "alarms",
+    "https://www.googleapis.com/*"
+  ],
+  "browser_action": {
+    "default_icon": {
+      "16": "assets/icon-16.png",
+      "32": "assets/icon-32.png"
+    },
+    "default_title": "Gmail Unread Counter",
+    "default_popup": "popup/index.html"
+  },
+  "background": {
+    "scripts": ["background/index.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "gmail-unread-counter@example.com"
+    }
+  },
+  "applications": {
+    "gecko": {
+      "id": "gmail-unread-counter@example.com"
+    }
+  }
+}
