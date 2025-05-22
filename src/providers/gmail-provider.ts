@@ -232,22 +232,28 @@ export class GmailProvider extends BaseEmailProvider {
    */
   async getUnreadCount(): Promise<number> {
     try {
-      console.log('[Gmail] Getting unread count using history');
-      // Для получения общего количества непрочитанных, можно запросить историю без startHistoryId
-      // и посчитать сообщения с меткой UNREAD. Однако, это может быть неэффективно для большого количества писем.
-      // Более эффективный способ - использовать endpoint /users/me/labels/UNREAD, как было ранее.
-      // Но так как задача перейти на history, реализуем через него.
-      // В реальном приложении, возможно, стоит использовать комбинацию подходов.
+      console.log('[Gmail] Getting total unread count');
+      const accessToken = await this.getAccessToken();
+      const response = await fetch(`${GMAIL_API_BASE_URL}/users/me/labels/UNREAD?fields=messagesUnread`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
 
-      // В данном случае, для соответствия абстрактному методу, вернем 0 или реализуем подсчет через history,
-      // но это будет неточное количество всех непрочитанных, а только тех, что изменились с последнего historyId.
-      // Для получения точного количества всех непрочитанных, лучше использовать /users/me/labels/UNREAD.
-      // Вернем 0 пока, так как основная логика будет использовать getHistory для получения ID.
-      // TODO: Возможно, стоит пересмотреть BaseEmailProvider или реализовать подсчет более точно.
-      return 0;
+      if (!response.ok) {
+        console.error('[Gmail] Failed to get unread count label info:', response.status, response.statusText);
+        throw new Error(`Failed to get unread count: ${response.status} ${response.statusText}`);
+      }
+
+      const labelInfo = await response.json();
+      console.log('[Gmail] Unread label info:', labelInfo);
+      return labelInfo.messagesUnread || 0; // messagesUnread contains the total number of unread messages
     } catch (error) {
-      console.error('[Gmail] Error getting unread count:', error);
-      return 0;
+      console.error('[Gmail] Error getting total unread count:', error);
+      // It's often better to let errors propagate or handle them based on specific requirements
+      // For now, returning 0 in case of error to prevent breaking existing flows,
+      // but this might need adjustment based on how errors should be surfaced to the user.
+      return 0; 
     }
   }
 
