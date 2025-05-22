@@ -60,9 +60,21 @@ export interface EmailProvider {
   openMail(email?: string): void;
   
   /**
-   * Обновление информации о непрочитанных письмах
+   * Получение полной информации об аккаунте, включая непрочитанные письма и другие детали.
    */
-  updateUnreadCount(): Promise<StoredAccount>;
+  fetchStoredAccountData(): Promise<StoredAccount>;
+}
+
+/**
+ * Интерфейс для провайдера, поддерживающего историю сообщений
+ */
+import { GmailMessageDetail } from '../types'; // Убедитесь, что путь правильный
+
+export interface IHistoryProvider extends EmailProvider {
+  getHistory(startHistoryId?: string): Promise<{ historyId: string; messages: GmailMessageDetail[] }>;
+  getMessage(messageId: string): Promise<GmailMessageDetail>;
+  // Рассмотреть, нужны ли здесь saveLastHistoryId/getLastHistoryId или это детали внутренней реализации.
+  // Пока что оставляем их вне интерфейса согласно плану.
 }
 
 /**
@@ -96,14 +108,15 @@ export abstract class BaseEmailProvider implements EmailProvider {
   }
   
   /**
-   * Обновление информации о непрочитанных письмах
+   * Получение полной информации об аккаунте, включая непрочитанные письма и другие детали.
+   * Этот метод предназначен для получения всех данных, необходимых для создания объекта StoredAccount.
    */
-  async updateUnreadCount(): Promise<StoredAccount> {
+  async fetchStoredAccountData(): Promise<StoredAccount> {
     try {
-      console.log(`[${this.id}] Starting updateUnreadCount`);
+      console.log(`[${this.id}] Starting fetchStoredAccountData`);
       
       // Получаем профиль пользователя
-      console.log(`[${this.id}] Getting user profile`);
+      console.log(`[${this.id}] Getting user profile for fetchStoredAccountData`);
       const profile = await this.getUserProfile();
       console.log(`[${this.id}] User profile received:`, profile);
       
@@ -123,7 +136,7 @@ export abstract class BaseEmailProvider implements EmailProvider {
       
       return account;
     } catch (error) {
-      console.error(`[${this.id}] Error updating unread count:`, error);
+      console.error(`[${this.id}] Error in fetchStoredAccountData:`, error);
       throw error;
     }
   }
@@ -156,3 +169,5 @@ export class EmailProviderFactory {
     return Array.from(this.providers.values());
   }
 }
+
+// Комментарий про перемещение импорта GmailMessageDetail был удален, так как импорт находится в правильном месте.
