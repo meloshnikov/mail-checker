@@ -253,7 +253,10 @@ const App: React.FC = () => {
             key={account.email}
             className={`account-item ${viewingMessagesFor === account.email ? 'active' : ''}`}
             onClick={() => {
-              if (account.providerId === 'gmail' && account.historyDetails?.messages?.length > 0) {
+              if (account.providerId === 'gmail' && 
+                  account.historyDetails && 
+                  account.historyDetails.messages && 
+                  account.historyDetails.messages.length > 0) {
                 // Для Gmail с непрочитанными сообщениями, переключаем просмотр сообщений
                 setViewingMessagesFor(viewingMessagesFor === account.email ? null : account.email);
               } else {
@@ -268,7 +271,11 @@ const App: React.FC = () => {
             </div>
 
             {/* Список непрочитанных сообщений для Gmail */}
-            {account.providerId === 'gmail' && viewingMessagesFor === account.email && account.historyDetails?.messages?.length > 0 && (
+            {account.providerId === 'gmail' && 
+             viewingMessagesFor === account.email && 
+             account.historyDetails && 
+             account.historyDetails.messages && 
+             account.historyDetails.messages.length > 0 && (
               <ul className="message-list">
                 {account.historyDetails.messages.map((message: GmailMessageDetail) => { 
                   // Извлекаем отправителя и тему из заголовков
