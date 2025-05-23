@@ -68,8 +68,8 @@ export interface StoredAccount {
 
 // Детали истории для аккаунта
 export interface AccountHistoryDetails {
-  lastHistoryId: string;
-  messages: GmailMessageDetail[];
+  lastHistoryId: string; // Последний известный идентификатор истории, используемый для запроса последующих изменений.
+  messages: GmailMessageDetail[]; // Массив детализированных сообщений, полученных из истории.
 }
 
 // Типы для сообщений между background и popup

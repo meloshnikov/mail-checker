@@ -25,17 +25,17 @@ export abstract class OAuthImplicitFlowProvider extends BaseEmailProvider {
     url.searchParams.append('response_type', 'token');
     url.searchParams.append('redirect_uri', redirectUri);
     url.searchParams.append('scope', this.config.scopes.join(' '));
-    // Добавление других общих параметров, таких как 'prompt: consent', если это применимо ко всем implicit flows
-    // Для Gmail используются 'prompt: consent' и 'include_granted_scopes: true'.
-    // Для Яндекса 'force_confirm: yes' может использоваться аналогично 'prompt: consent'.
-    // Это можно сделать более общим или настраиваемым при необходимости.
-    if (this.config.id === 'gmail') {
-      url.searchParams.append('prompt', 'consent');
-      url.searchParams.append('include_granted_scopes', 'true');
-    } else if (this.config.id === 'yandex') {
-      // Яндекс использует 'force_confirm' вместо 'prompt' для схожего поведения
-      // url.searchParams.append('force_confirm', 'yes'); // Пример
+
+    // Добавляем кастомные параметры авторизации, если они определены в конфигурации
+    if (this.config.customAuthParams) {
+      for (const [key, value] of Object.entries(this.config.customAuthParams)) {
+        url.searchParams.append(key, value);
+      }
     }
+    
+    // Предыдущие комментарии о специфичных для Gmail/Yandex параметрах здесь больше не актуальны,
+    // так как эта логика теперь управляется через customAuthParams в конфигурации.
+
     console.log(`[${this.config.id}] Generated auth URL:`, url.toString());
     console.log(`[${this.config.id}] Redirect URI:`, redirectUri);
     return url.toString();
