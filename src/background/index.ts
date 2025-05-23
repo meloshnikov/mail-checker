@@ -1,5 +1,5 @@
-import { MessageType, StoredAccount, Settings, GmailMessageDetail } from '../types';
-import EmailProviderFactory, { GmailProvider } from '../providers';
+import { MessageType, StoredAccount, Settings } from '../types'; // Removed GmailMessageDetail, GmailProvider may be removed if not used
+import EmailProviderFactory from '../providers'; // Removed specific GmailProvider import, relying on EmailProvider interface
 
 // Настройки по умолчанию
 const DEFAULT_SETTINGS: Settings = {
@@ -170,49 +170,13 @@ async function updateAllAccounts(): Promise<StoredAccount[]> {
         continue;
       }
 
-      let updatedAccount: StoredAccount;
-
-      if (account.providerId === 'gmail') {
-        console.log(`Updating Gmail account using history: ${account.email}`);
-        const gmailProvider = provider as GmailProvider; // Приводим тип для доступа к новым методам
-
-        // Получаем последний сохраненный historyId для этого аккаунта
-        const lastHistoryId = await gmailProvider.getLastHistoryId();
-        console.log(`Last history ID for ${account.email}:`, lastHistoryId);
-
-        // Получаем историю изменений с последнего historyId
-        const historyResult = await gmailProvider.getHistory(lastHistoryId);
-        console.log(`History result for ${account.email}:`, historyResult);
-
-        // Обрабатываем новые сообщения
-        const newMessages: GmailMessageDetail[] = [];
-        for (const messageId of historyResult.messages.map((msg: { id: string }) => msg.id)) {
-          try {
-            console.log(`Fetching message: ${messageId}`);
-            const message = await gmailProvider.getMessage(messageId);
-            newMessages.push(message);
-            console.log(`Fetched message: ${messageId}`, message);
-          } catch (messageError) {
-            console.error(`Error fetching message ${messageId}:`, messageError);
-          }
-        }
-
-        // Обновляем аккаунт с новыми сообщениями и historyId
-        updatedAccount = {
-          ...account,
-          unreadCount: newMessages.length, // Количество новых непрочитанных сообщений
-          lastHistoryId: historyResult.historyId,
-          unreadMessages: newMessages, // Сохраняем список новых сообщений
-        };
-
-        // Сохраняем новый historyId
-        await gmailProvider.saveLastHistoryId(historyResult.historyId);
-
-      } else {
-        // Для других провайдеров используем старый метод
-        console.log(`Updating account using updateUnreadCount: ${account.email} (${account.providerId})`);
-        updatedAccount = await provider.updateUnreadCount();
-      }
+      // Вся логика получения данных аккаунта теперь инкапсулирована в provider.fetchStoredAccountData()
+      // Это включает получение непрочитанных сообщений, деталей истории (для Gmail), и т.д.
+      console.log(`Fetching stored account data for ${account.email} using provider ${provider.id}`);
+      const updatedAccount: StoredAccount = await provider.fetchStoredAccountData();
+      
+      // Provider-specific logic like saving lastHistoryId is now handled within the provider's fetchStoredAccountData.
+      // No need for specific checks or calls like gmailProvider.saveLastHistoryId() here.
 
       updatedAccounts.push(updatedAccount);
 
@@ -291,7 +255,7 @@ async function authorizeAccount(providerId: string): Promise<StoredAccount> {
   await provider.authorize();
   
   // Обновляем данные
-  const account = await provider.updateUnreadCount();
+  const account = await provider.fetchStoredAccountData(); // Используем новый метод
   
   // Сохраняем аккаунт
   await updateAccount(account);

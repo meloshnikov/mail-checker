@@ -1,3 +1,7 @@
+// src/providers/index.ts
+// Этот файл является центральной точкой для импорта, регистрации и экспорта всех провайдеров электронной почты.
+// Новые провайдеры должны быть импортированы и зарегистрированы здесь в EmailProviderFactory.
+
 import { EmailProviderFactory } from './email-provider';
 import { GmailProvider } from './gmail-provider';
 import { YandexProvider } from './yandex-provider';

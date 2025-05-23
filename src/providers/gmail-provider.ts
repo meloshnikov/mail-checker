@@ -1,202 +1,113 @@
-import { AuthToken } from '../types';
-import { BaseEmailProvider } from './email-provider';
+import { AuthToken, GmailMessageDetail, StoredAccount } from '../types'; // Removed AccountHistoryDetails
+import { IHistoryProvider } from './email-provider';
+import { OAuthImplicitFlowProvider } from './oauth-implicit-provider';
+import { GMAIL_CONFIG } from './provider-configs';
 
-// Константы для OAuth 2.0
-const CLIENT_ID = 'CLIENT_ID';
-const REDIRECT_URL = browser.identity.getRedirectURL();
-const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
-const AUTH_URL = 'https://accounts.google.com/o/oauth2/auth';
-const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const GMAIL_API_BASE_URL = 'https://gmail.googleapis.com/gmail/v1';
-
-// Ключ для хранения токена в storage.local
-const TOKEN_STORAGE_KEY = 'gmail_auth_token';
+// Ключ для хранения последнего historyId в storage.local (специфично для Gmail)
+const GMAIL_LAST_HISTORY_ID_STORAGE_KEY = 'gmail_last_history_id';
 
 /**
  * Провайдер для работы с Gmail
  */
-export class GmailProvider extends BaseEmailProvider {
-  readonly id = 'gmail';
-  readonly name = 'Gmail';
-  readonly iconUrl = 'assets/gmail-icon.png';
-  readonly mailUrl = 'https://mail.google.com/mail/u/';
-  
-  /**
-   * Получение URL для авторизации (Implicit Flow)
-   */
-  private getAuthUrl(): string {
-    const url = new URL(AUTH_URL);
-    url.searchParams.append('client_id', CLIENT_ID);
-    url.searchParams.append('response_type', 'token');
-    url.searchParams.append('redirect_uri', REDIRECT_URL);
-    url.searchParams.append('scope', SCOPES.join(' '));
-    url.searchParams.append('include_granted_scopes', 'true');
-    url.searchParams.append('prompt', 'consent');
-    
-    console.log('[Gmail] Generated auth URL (Implicit Flow):', url.toString());
-    console.log('[Gmail] Redirect URL:', REDIRECT_URL);
-    
-    return url.toString();
+export class GmailProvider extends OAuthImplicitFlowProvider implements IHistoryProvider {
+  constructor() {
+    super(GMAIL_CONFIG);
   }
   
   /**
-   * Авторизация пользователя через OAuth 2.0 (Implicit Flow)
+   * Получение информации о пользователе (только email, как требует EmailProvider)
+   * Внутренне может также получать initialHistoryId, но не сохраняет его здесь.
    */
-  async authorize(): Promise<AuthToken> {
-    try {
-      console.log('[Gmail] Starting authorization process (Implicit Flow)');
-      const authUrl = this.getAuthUrl();
-      
-      // Открываем окно авторизации
-      console.log('[Gmail] Launching web auth flow');
-      const redirectUrl = await browser.identity.launchWebAuthFlow({
-        url: authUrl,
-        interactive: true,
-      });
-      
-      console.log('[Gmail] Received redirect URL:', redirectUrl);
-      
-      // Извлекаем токен из URL (в Implicit Flow токен возвращается в хэше URL)
-      const hashParams = new URLSearchParams(
-        redirectUrl.substring(redirectUrl.indexOf('#') + 1)
-      );
-      
-      const accessToken = hashParams.get('access_token');
-      const expiresIn = hashParams.get('expires_in');
-      const tokenType = hashParams.get('token_type');
-      const error = hashParams.get('error');
-      
-      if (error) {
-        console.error('[Gmail] Authorization error:', error);
-        throw new Error(`Authorization failed: ${error}`);
-      }
-      
-      if (!accessToken) {
-        console.error('[Gmail] No access token received in redirect URL');
-        throw new Error('Authorization failed: No access token received');
-      }
-      
-      console.log('[Gmail] Access token received directly (Implicit Flow)');
-      
-      // Создаем объект токена
-      const token: AuthToken = {
-        accessToken,
-        expiresAt: Date.now() + (parseInt(expiresIn || '3600') * 1000),
-        // В Implicit Flow нет refresh_token, поэтому refreshToken будет undefined
-      };
-      
-      console.log('[Gmail] Token created, saving to storage');
-      
-      // Сохраняем токен в storage.local
-      await this.saveToken(token);
-      
-      return token;
-    } catch (error) {
-      console.error('[Gmail] Authorization error:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Получение действующего токена доступа
-   */
-  async getAccessToken(): Promise<string> {
-    try {
-      console.log('[Gmail] Getting access token');
-      const token = await this.getToken();
-      
-      if (!token) {
-        console.error('[Gmail] No authentication token found');
-        throw new Error('No authentication token found');
-      }
-      
-      // Проверяем, не истек ли токен
-      if (token.expiresAt <= Date.now() + 60000) { // Добавляем минутный запас
-        console.log('[Gmail] Token expired or about to expire, refreshing');
-        
-        // В Implicit Flow нам нужно заново авторизоваться
-        const newToken = await this.authorize();
-        return newToken.accessToken;
-      }
-      
-      console.log('[Gmail] Using existing valid token');
-      return token.accessToken;
-    } catch (error) {
-      console.error('[Gmail] Error getting access token:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Получение информации о пользователе
-   */
-  async getUserProfile(): Promise<{ email: string, historyId: number }> {
-    const accessToken = await this.getAccessToken();
+  async getUserProfile(): Promise<{ email: string; initialHistoryId?: string }> {
+    const accessToken = await super.getAccessToken(); // Используем super.getAccessToken() для получения токена из базового класса
     
-    const response = await fetch(`${GMAIL_API_BASE_URL}/users/me/profile`, {
+    const response = await fetch(`${this.config.apiUrl}/users/me/profile?fields=emailAddress,historyId`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
       },
     });
 
     if (!response.ok) {
+      console.error(`[${this.config.id}] Failed to get user profile:`, response.status, response.statusText);
       throw new Error(`Failed to get user profile: ${response.status} ${response.statusText}`);
     }
 
     const profile = await response.json();
-    this.saveLastHistoryId(profile.historyId);
-    
-    return { email: profile.emailAddress, historyId: profile.historyId };
+    // Не сохраняем lastHistoryId здесь. Это будет сделано в updateUnreadCount/fetchStoredAccountData (или будущем fetchStoredAccountData)
+    console.log(`[${this.config.id}] User profile fetched:`, { email: profile.emailAddress, historyId: profile.historyId });
+    return { email: profile.emailAddress, initialHistoryId: profile.historyId?.toString() };
   }
 
   /**
    * Получение истории изменений (новых непрочитанных писем)
-   * @param startHistoryId ID истории, с которого начинать получение изменений
-   * @returns Объект с historyId и списком сообщений
    */
-  async getHistory(startHistoryId?: string): Promise<{ historyId: string; messages: { id: string }[] }> {
-    const accessToken = await this.getAccessToken();
-    const url = `${GMAIL_API_BASE_URL}/users/me/history?labelId=UNREAD&startHistoryId=${startHistoryId}&maxResults=100&fields=history(labelsAdded,labelsRemoved,messagesAdded,messagesDeleted),historyId,nextPageToken`;
+  async getHistory(startHistoryId?: string): Promise<{ historyId: string; messages: GmailMessageDetail[] }> {
+    const accessToken = await super.getAccessToken();
+    // Используем this.config.apiUrl из конфигурации провайдера
+    const url = new URL(`${this.config.apiUrl}/users/me/history`);
+    url.searchParams.append('labelId', 'UNREAD');
+    if (startHistoryId) {
+      url.searchParams.append('startHistoryId', startHistoryId);
+    }
+    url.searchParams.append('maxResults', '100'); // Или другое значение по умолчанию, например, 10 или 20, если получаем много деталей
+    url.searchParams.append('fields', 'history(messagesAdded),historyId,nextPageToken'); 
+    // Убраны labelsAdded, labelsRemoved, messagesDeleted для упрощения, т.к. они не использовались для формирования unreadMessages
 
-    const response = await fetch(url, {
+    console.log(`[${this.config.id}] Getting history with startHistoryId: ${startHistoryId}`);
+    const response = await fetch(url.toString(), {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
       },
     });
 
     if (!response.ok) {
+      console.error(`[${this.config.id}] Failed to get history:`, response.status, response.statusText);
       throw new Error(`Failed to get history: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log(`[${this.config.id}] History data received:`, data);
 
-    // Фильтруем только сообщения, которые были добавлены и имеют метку UNREAD
-    const messages = data.history
-      ? data.history.flatMap((item: any) => item.messagesAdded || [])
+    // Фильтруем только идентификаторы сообщений, которые были добавлены (messagesAdded).
+    // Записи истории Gmail API v1 для messagesAdded уже содержат ресурс сообщения, если historyRecordTypes=messageAdded не указан.
+    // Однако предыдущий код запрашивал полные детали для каждого сообщения.
+    // Для согласованности с предыдущей логикой, предположим, что сообщения в истории — это просто ID, и для них требуется полная загрузка.
+    const addedMessageIds = data.history
+      ? data.history.flatMap((item: any) => (item.messagesAdded || []).map((added: any) => added.message.id))
       : [];
+    
+    console.log(`[${this.config.id}] Found ${addedMessageIds.length} added message IDs in history.`);
 
-    const detailedMessages = await Promise.all(
-      messages.map(async (msg: any) => {
-        const messageDetails = await this.getMessage(msg.message.id);
-        return messageDetails;
-      })
-    );
+    const detailedMessages: GmailMessageDetail[] = [];
+    // Ограничим количество запрашиваемых деталей, чтобы избежать слишком многих запросов API.
+    const MAX_DETAILED_MESSAGES_TO_FETCH = 10; 
+    for (const messageId of addedMessageIds.slice(0, MAX_DETAILED_MESSAGES_TO_FETCH)) {
+        try {
+            const messageDetails = await this.getMessage(messageId);
+            detailedMessages.push(messageDetails);
+        } catch (error) {
+            console.error(`[${this.config.id}] Error fetching details for message ${messageId}:`, error);
+            // Продолжаем обработку, даже если одно сообщение не удалось загрузить.
+        }
+    }
+    
+    console.log(`[${this.config.id}] Fetched details for ${detailedMessages.length} messages.`);
 
     return {
       historyId: data.historyId,
-      messages: detailedMessages,
+      messages: detailedMessages, // Возвращаем массив детализированных сообщений.
     };
   }
 
   /**
    * Получение полного сообщения по ID
-   * @param messageId ID сообщения
-   * @returns Объект сообщения
    */
-  async getMessage(messageId: string): Promise<any> {
-    const accessToken = await this.getAccessToken();
-    const url = `${GMAIL_API_BASE_URL}/users/me/messages/${messageId}?fields=id,snippet,payload(headers,parts)`;
-
+  async getMessage(messageId: string): Promise<GmailMessageDetail> {
+    const accessToken = await super.getAccessToken();
+    // Используем this.config.apiUrl из конфигурации провайдера
+    const url = `${this.config.apiUrl}/users/me/messages/${messageId}?fields=id,threadId,snippet,payload(headers,parts,partId,mimeType,filename,body),labelIds`;
+    
+    console.log(`[${this.config.id}] Getting message details for ID: ${messageId}`);
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -204,103 +115,131 @@ export class GmailProvider extends BaseEmailProvider {
     });
 
     if (!response.ok) {
+      console.error(`[${this.config.id}] Failed to get message ${messageId}:`, response.status, response.statusText);
       throw new Error(`Failed to get message ${messageId}: ${response.status} ${response.statusText}`);
     }
-
-    return response.json();
+    const messageData = await response.json();
+    console.log(`[${this.config.id}] Message details received for ID ${messageId}:`, messageData);
+    return messageData as GmailMessageDetail;
   }
 
   /**
    * Сохранение последнего historyId
-   * @param historyId ID истории
    */
   async saveLastHistoryId(historyId: string): Promise<void> {
-    await browser.storage.local.set({ 'gmail_last_history_id': historyId });
+    console.log(`[${this.config.id}] Saving last history ID: ${historyId} to key: ${GMAIL_LAST_HISTORY_ID_STORAGE_KEY}`);
+    await browser.storage.local.set({ [GMAIL_LAST_HISTORY_ID_STORAGE_KEY]: historyId });
   }
 
   /**
    * Получение последнего сохраненного historyId
-   * @returns Последний historyId или undefined
    */
   async getLastHistoryId(): Promise<string | undefined> {
-    const data = await browser.storage.local.get('gmail_last_history_id');
-    return data['gmail_last_history_id'];
+    console.log(`[${this.config.id}] Getting last history ID from key: ${GMAIL_LAST_HISTORY_ID_STORAGE_KEY}`);
+    const data = await browser.storage.local.get(GMAIL_LAST_HISTORY_ID_STORAGE_KEY);
+    const historyId = data[GMAIL_LAST_HISTORY_ID_STORAGE_KEY];
+    console.log(`[${this.config.id}] Retrieved last history ID: ${historyId}`);
+    return historyId;
   }
 
   /**
-   * Получение количества непрочитанных писем (с использованием истории)
+   * Получение общего количества непрочитанных писем
    */
   async getUnreadCount(): Promise<number> {
     try {
-      console.log('[Gmail] Getting unread count using history');
-      // Для получения общего количества непрочитанных, можно запросить историю без startHistoryId
-      // и посчитать сообщения с меткой UNREAD. Однако, это может быть неэффективно для большого количества писем.
-      // Более эффективный способ - использовать endpoint /users/me/labels/UNREAD, как было ранее.
-      // Но так как задача перейти на history, реализуем через него.
-      // В реальном приложении, возможно, стоит использовать комбинацию подходов.
+      console.log(`[${this.config.id}] Getting total unread count`);
+      const accessToken = await super.getAccessToken(); // Используем super.getAccessToken() для получения токена
+      // Используем this.config.apiUrl из конфигурации провайдера
+      const response = await fetch(`${this.config.apiUrl}/users/me/labels/UNREAD?fields=messagesUnread`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
 
-      // В данном случае, для соответствия абстрактному методу, вернем 0 или реализуем подсчет через history,
-      // но это будет неточное количество всех непрочитанных, а только тех, что изменились с последнего historyId.
-      // Для получения точного количества всех непрочитанных, лучше использовать /users/me/labels/UNREAD.
-      // Вернем 0 пока, так как основная логика будет использовать getHistory для получения ID.
-      // TODO: Возможно, стоит пересмотреть BaseEmailProvider или реализовать подсчет более точно.
-      return 0;
+      if (!response.ok) {
+        console.error(`[${this.config.id}] Failed to get unread count label info:`, response.status, response.statusText);
+        throw new Error(`Failed to get unread count: ${response.status} ${response.statusText}`);
+      }
+
+      const labelInfo = await response.json();
+      console.log(`[${this.config.id}] Unread label info:`, labelInfo);
+      return labelInfo.messagesUnread || 0;
     } catch (error) {
-      console.error('[Gmail] Error getting unread count:', error);
-      return 0;
+      console.error(`[${this.config.id}] Error getting total unread count:`, error);
+      return 0; // Возвращаем 0 в случае ошибки, как и в предыдущей реализации.
     }
   }
 
   /**
-   * Проверка, авторизован ли пользователь
+   * Переопределение метода fetchStoredAccountData из BaseEmailProvider для формирования StoredAccount,
+   * включая специфичные для Gmail детали истории.
    */
-  async isAuthorized(): Promise<boolean> {
+  async fetchStoredAccountData(): Promise<StoredAccount> {
     try {
-      console.log('[Gmail] Checking if user is authorized');
-      const token = await this.getToken();
-      const isValid = !!token && token.expiresAt > Date.now();
-      console.log('[Gmail] Authorization status:', isValid ? 'authorized' : 'not authorized');
-      return isValid;
+      console.log(`[${this.config.id}] Starting overridden fetchStoredAccountData for Gmail`);
+
+      // 1. Получаем профиль пользователя (email и, возможно, начальный historyId).
+      const userProfile = await this.getUserProfile();
+      console.log(`[${this.config.id}] User profile received:`, userProfile);
+
+      // 2. Получаем общее количество непрочитанных писем.
+      const totalUnreadMessages = await this.getUnreadCount();
+      console.log(`[${this.config.id}] Total unread messages:`, totalUnreadMessages);
+
+      // 3. Получаем текущий сохраненный historyId из локального хранилища.
+      const currentLastHistoryId = await this.getLastHistoryId();
+      console.log(`[${this.config.id}] Current last history ID from storage:`, currentLastHistoryId);
+      
+      // Определяем startHistoryId для getHistory.
+      // Если currentLastHistoryId отсутствует, можно использовать initialHistoryId из профиля.
+      // Gmail API /history требует startHistoryId. Если его нет, getUserProfile возвращает initialHistoryId.
+      // Если currentLastHistoryId пуст, это может быть первая синхронизация.
+      // Для Gmail, если нет currentLastHistoryId, используем тот, что пришел с профилем.
+      const historyStartId = currentLastHistoryId || userProfile.initialHistoryId;
+
+      // 4. Получаем историю сообщений (новые сообщения и новый historyId).
+      // Инициализируем historyResult значениями по умолчанию.
+      let historyResult: { historyId: string; messages: GmailMessageDetail[] } = { 
+        historyId: currentLastHistoryId || userProfile.initialHistoryId || "", 
+        messages: [] 
+      };
+
+      if (historyStartId) { // Запрашиваем историю только если есть с чего начать.
+         historyResult = await this.getHistory(historyStartId);
+         console.log(`[${this.config.id}] History result:`, historyResult);
+
+         // 5. Сохраняем новый historyId, если он изменился.
+         if (historyResult.historyId && historyResult.historyId !== currentLastHistoryId) {
+           await this.saveLastHistoryId(historyResult.historyId);
+           console.log(`[${this.config.id}] Saved new history ID: ${historyResult.historyId}`);
+         }
+      } else {
+        console.warn(`[${this.config.id}] No startHistoryId available (currentLastHistoryId or initialHistoryId). Skipping getHistory.`);
+        // Если historyId отсутствует, historyDetails.lastHistoryId должен оставаться актуальным (т.е. undefined или старым),
+        // а messages будет пустым массивом.
+        historyResult.historyId = currentLastHistoryId || ""; // Устанавливаем в текущий сохраненный ID или пустую строку.
+      }
+
+      // 6. Формируем объект StoredAccount.
+      const account: StoredAccount = {
+        providerId: this.config.id,
+        email: userProfile.email,
+        unreadCount: totalUnreadMessages,
+        lastUpdated: Date.now(),
+        messages: historyResult.messages, // Сообщения теперь на верхнем уровне
+        providerState: { // providerState содержит специфичные для провайдера данные
+          lastHistoryId: historyResult.historyId // lastHistoryId теперь здесь
+        }
+      };
+      console.log(`[${this.config.id}] Account object created for Gmail:`, account);
+      
+      return account;
     } catch (error) {
-      console.error('[Gmail] Error checking authorization:', error);
-      return false;
+      console.error(`[${this.config.id}] Error in overridden fetchStoredAccountData for Gmail:`, error);
+      // В случае ошибки, необходимо вернуть StoredAccount с информацией об ошибке или пробросить ошибку дальше.
+      // Для соответствия сигнатуре метода, если необходимо что-то вернуть, это должен быть объект StoredAccount.
+      // Однако, предпочтительнее пробросить ошибку, чтобы вызывающий код мог ее корректно обработать.
+      throw error; 
     }
-  }
-
-  /**
-   * Выход из аккаунта
-   */
-  async logout(): Promise<void> {
-    console.log('[Gmail] Logging out');
-    await this.removeToken();
-  }
-
-  /**
-   * Сохранение токена в storage.local
-   */
-  private async saveToken(token: AuthToken): Promise<void> {
-    console.log('[Gmail] Saving token to storage');
-    await browser.storage.local.set({ [TOKEN_STORAGE_KEY]: token });
-
-    // Проверяем, что данные сохранились
-    const verification = await browser.storage.local.get(TOKEN_STORAGE_KEY);
-    console.log('[Gmail] Verification of saved token:', verification[TOKEN_STORAGE_KEY] ? 'Token saved successfully' : 'Failed to save token');
-  }
-
-  /**
-   * Получение токена из storage.local
-   */
-  private async getToken(): Promise<AuthToken | null> {
-    console.log('[Gmail] Getting token from storage');
-    const data = await browser.storage.local.get(TOKEN_STORAGE_KEY);
-    return data[TOKEN_STORAGE_KEY] || null;
-  }
-
-  /**
-   * Удаление токена из storage.local
-   */
-  private async removeToken(): Promise<void> {
-    console.log('[Gmail] Removing token from storage');
-    await browser.storage.local.remove(TOKEN_STORAGE_KEY);
   }
 }
