@@ -61,10 +61,10 @@ export interface AuthToken {
 export interface StoredAccount {
   providerId: string; // Идентификатор провайдера
   email: string;
-  unreadCount: number;
-  lastUpdated: number;
-  lastHistoryId?: string; // Для Gmail: последний обработанный historyId
-  unreadMessages?: GmailMessageDetail[]; // Для Gmail: список непрочитанных сообщений
+  unreadCount: number; // Общее количество непрочитанных писем в почтовом ящике на момент последнего обновления. Это основное значение для отображения суммарного счетчика на иконке расширения и в общем списке аккаунтов.
+  lastUpdated: number; // Время последнего обновления данных аккаунта (timestamp).
+  messages?: GmailMessageDetail[]; // Опциональный список недавних детализированных сообщений.
+  providerState?: Record<string, any>; // Опциональный объект для хранения специфичных для провайдера данных состояния синхронизации (например, lastHistoryId для Gmail).
 }
 
 // Типы для сообщений между background и popup
