@@ -2,16 +2,17 @@
 // Файл конфигураций для различных провайдеров электронной почты
 
 export interface ProviderConfig {
-  id: string;
-  name: string;
-  clientId: string;
-  authUrl: string;
-  tokenUrl?: string;
-  apiUrl: string;
-  scopes: string[];
-  tokenStorageKey: string;
-  iconUrl: string;
-  mailUrl: string;
+  id: string; // Уникальный идентификатор провайдера (например, "gmail", "yandex")
+  name: string; // Отображаемое имя провайдера (например, "Gmail", "Yandex Mail")
+  clientId: string; // Идентификатор клиента OAuth
+  authUrl: string; // URL страницы авторизации OAuth
+  tokenUrl?: string; // Опциональный URL для обмена кода на токен (для Authorization Code Flow, не используется в Implicit)
+  apiUrl: string; // Базовый URL API провайдера
+  scopes: string[]; // Массив запрашиваемых OAuth scopes
+  tokenStorageKey: string; // Ключ для сохранения токена в browser.storage.local
+  iconUrl: string; // Путь к иконке провайдера (относительно корня расширения)
+  mailUrl: string; // URL для перехода к почтовому ящику пользователя
+  customAuthParams?: Record<string, string>; // Опциональные специфичные для провайдера параметры OAuth авторизации.
 }
 
 export const GMAIL_CONFIG: ProviderConfig = {
@@ -25,6 +26,10 @@ export const GMAIL_CONFIG: ProviderConfig = {
   tokenStorageKey: 'gmail_auth_token',
   iconUrl: 'assets/gmail-icon.png',
   mailUrl: 'https://mail.google.com/mail/u/',
+  customAuthParams: {
+    'prompt': 'consent',
+    'include_granted_scopes': 'true'
+  }
 };
 
 export const YANDEX_CONFIG: ProviderConfig = {

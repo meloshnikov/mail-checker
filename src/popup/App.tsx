@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AppState, ConnectionStatus, MessageType, StoredAccount } from '../types';
+import { AppState, ConnectionStatus, MessageType, StoredAccount, GmailMessageDetail, GmailMessageHeader } from '../types';
 
 // Начальное состояние приложения
 const initialState: AppState = {
@@ -253,7 +253,7 @@ const App: React.FC = () => {
             key={account.email}
             className={`account-item ${viewingMessagesFor === account.email ? 'active' : ''}`}
             onClick={() => {
-              if (account.providerId === 'gmail' && account.unreadMessages && account.unreadMessages.length > 0) {
+              if (account.providerId === 'gmail' && account.historyDetails?.messages?.length > 0) {
                 // Для Gmail с непрочитанными сообщениями, переключаем просмотр сообщений
                 setViewingMessagesFor(viewingMessagesFor === account.email ? null : account.email);
               } else {
@@ -268,12 +268,12 @@ const App: React.FC = () => {
             </div>
 
             {/* Список непрочитанных сообщений для Gmail */}
-            {account.providerId === 'gmail' && viewingMessagesFor === account.email && account.unreadMessages && account.unreadMessages.length > 0 && (
+            {account.providerId === 'gmail' && viewingMessagesFor === account.email && account.historyDetails?.messages?.length > 0 && (
               <ul className="message-list">
-                {account.unreadMessages.map(message => {
+                {account.historyDetails.messages.map((message: GmailMessageDetail) => { 
                   // Извлекаем отправителя и тему из заголовков
-                  const fromHeader = message.payload.headers.find(header => header.name === 'From');
-                  const subjectHeader = message.payload.headers.find(header => header.name === 'Subject');
+                  const fromHeader = message.payload.headers.find((header: GmailMessageHeader) => header.name === 'From');
+                  const subjectHeader = message.payload.headers.find((header: GmailMessageHeader) => header.name === 'Subject');
 
                   const sender = fromHeader ? fromHeader.value : 'Неизвестный отправитель';
                   const subject = subjectHeader ? subjectHeader.value : 'Без темы';

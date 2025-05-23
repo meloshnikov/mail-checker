@@ -169,5 +169,3 @@ export class EmailProviderFactory {
     return Array.from(this.providers.values());
   }
 }
-
-// Комментарий про перемещение импорта GmailMessageDetail был удален, так как импорт находится в правильном месте.
