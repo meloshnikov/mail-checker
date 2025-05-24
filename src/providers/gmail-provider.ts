@@ -3,7 +3,7 @@ import { IHistoryProvider } from './email-provider';
 import { OAuthImplicitFlowProvider } from './oauth-implicit-provider';
 import { GMAIL_CONFIG } from './provider-configs';
 
-// Ключ для хранения последнего historyId в storage.local (специфично для Gmail)
+/** Ключ для хранения последнего historyId в storage.local (специфично для Gmail) */
 const GMAIL_LAST_HISTORY_ID_STORAGE_KEY = 'gmail_last_history_id';
 
 /**
@@ -19,7 +19,8 @@ export class GmailProvider extends OAuthImplicitFlowProvider implements IHistory
    * Внутренне может также получать initialHistoryId, но не сохраняет его здесь.
    */
   async getUserProfile(): Promise<{ email: string; initialHistoryId?: string }> {
-    const accessToken = await super.getAccessToken(); // Используем super.getAccessToken() для получения токена из базового класса
+    /** Используем super.getAccessToken() для получения токена из базового класса */
+    const accessToken = await super.getAccessToken(); 
     
     const response = await fetch(`${this.config.apiUrl}/users/me/profile?fields=emailAddress,historyId`, {
       headers: {
@@ -33,7 +34,7 @@ export class GmailProvider extends OAuthImplicitFlowProvider implements IHistory
     }
 
     const profile = await response.json();
-    // Не сохраняем lastHistoryId здесь. Это будет сделано в updateUnreadCount/fetchStoredAccountData (или будущем fetchStoredAccountData)
+    /** Не сохраняем lastHistoryId здесь. Это будет сделано в updateUnreadCount/fetchStoredAccountData (или будущем fetchStoredAccountData) */
     console.log(`[${this.config.id}] User profile fetched:`, { email: profile.emailAddress, historyId: profile.historyId });
     return { email: profile.emailAddress, initialHistoryId: profile.historyId?.toString() };
   }
@@ -43,15 +44,15 @@ export class GmailProvider extends OAuthImplicitFlowProvider implements IHistory
    */
   async getHistory(startHistoryId?: string): Promise<{ historyId: string; messages: GmailMessageDetail[] }> {
     const accessToken = await super.getAccessToken();
-    // Используем this.config.apiUrl из конфигурации провайдера
+    /** Используем this.config.apiUrl из конфигурации провайдера */
     const url = new URL(`${this.config.apiUrl}/users/me/history`);
     url.searchParams.append('labelId', 'UNREAD');
     if (startHistoryId) {
       url.searchParams.append('startHistoryId', startHistoryId);
     }
-    url.searchParams.append('maxResults', '100'); // Или другое значение по умолчанию, например, 10 или 20, если получаем много деталей
+    url.searchParams.append('maxResults', '100'); /** Или другое значение по умолчанию, например, 10 или 20, если получаем много деталей */
     url.searchParams.append('fields', 'history(messagesAdded),historyId,nextPageToken'); 
-    // Убраны labelsAdded, labelsRemoved, messagesDeleted для упрощения, т.к. они не использовались для формирования unreadMessages
+    /** Убраны labelsAdded, labelsRemoved, messagesDeleted для упрощения, т.к. они не использовались для формирования unreadMessages */
 
     console.log(`[${this.config.id}] Getting history with startHistoryId: ${startHistoryId}`);
     const response = await fetch(url.toString(), {
@@ -68,10 +69,12 @@ export class GmailProvider extends OAuthImplicitFlowProvider implements IHistory
     const data = await response.json();
     console.log(`[${this.config.id}] History data received:`, data);
 
-    // Фильтруем только идентификаторы сообщений, которые были добавлены (messagesAdded).
-    // Записи истории Gmail API v1 для messagesAdded уже содержат ресурс сообщения, если historyRecordTypes=messageAdded не указан.
-    // Однако предыдущий код запрашивал полные детали для каждого сообщения.
-    // Для согласованности с предыдущей логикой, предположим, что сообщения в истории — это просто ID, и для них требуется полная загрузка.
+    /** 
+     * Фильтруем только идентификаторы сообщений, которые были добавлены (messagesAdded).
+     * Записи истории Gmail API v1 для messagesAdded уже содержат ресурс сообщения, если historyRecordTypes=messageAdded не указан.
+     * Однако предыдущий код запрашивал полные детали для каждого сообщения.
+     * Для согласованности с предыдущей логикой, предположим, что сообщения в истории — это просто ID, и для них требуется полная загрузка.
+     */
     const addedMessageIds = data.history
       ? data.history.flatMap((item: any) => (item.messagesAdded || []).map((added: any) => added.message.id))
       : [];
@@ -79,7 +82,7 @@ export class GmailProvider extends OAuthImplicitFlowProvider implements IHistory
     console.log(`[${this.config.id}] Found ${addedMessageIds.length} added message IDs in history.`);
 
     const detailedMessages: GmailMessageDetail[] = [];
-    // Ограничим количество запрашиваемых деталей, чтобы избежать слишком многих запросов API.
+    /** Ограничим количество запрашиваемых деталей, чтобы избежать слишком многих запросов API. */
     const MAX_DETAILED_MESSAGES_TO_FETCH = 10; 
     for (const messageId of addedMessageIds.slice(0, MAX_DETAILED_MESSAGES_TO_FETCH)) {
         try {
@@ -87,7 +90,7 @@ export class GmailProvider extends OAuthImplicitFlowProvider implements IHistory
             detailedMessages.push(messageDetails);
         } catch (error) {
             console.error(`[${this.config.id}] Error fetching details for message ${messageId}:`, error);
-            // Продолжаем обработку, даже если одно сообщение не удалось загрузить.
+            /** Продолжаем обработку, даже если одно сообщение не удалось загрузить. */
         }
     }
     
@@ -95,7 +98,7 @@ export class GmailProvider extends OAuthImplicitFlowProvider implements IHistory
 
     return {
       historyId: data.historyId,
-      messages: detailedMessages, // Возвращаем массив детализированных сообщений.
+      messages: detailedMessages, /** Возвращаем массив детализированных сообщений. */
     };
   }
 
@@ -104,7 +107,7 @@ export class GmailProvider extends OAuthImplicitFlowProvider implements IHistory
    */
   async getMessage(messageId: string): Promise<GmailMessageDetail> {
     const accessToken = await super.getAccessToken();
-    // Используем this.config.apiUrl из конфигурации провайдера
+    /** Используем this.config.apiUrl из конфигурации провайдера */
     const url = `${this.config.apiUrl}/users/me/messages/${messageId}?fields=id,threadId,snippet,payload(headers,parts,partId,mimeType,filename,body),labelIds`;
     
     console.log(`[${this.config.id}] Getting message details for ID: ${messageId}`);
@@ -148,8 +151,9 @@ export class GmailProvider extends OAuthImplicitFlowProvider implements IHistory
   async getUnreadCount(): Promise<number> {
     try {
       console.log(`[${this.config.id}] Getting total unread count`);
-      const accessToken = await super.getAccessToken(); // Используем super.getAccessToken() для получения токена
-      // Используем this.config.apiUrl из конфигурации провайдера
+      /** Используем super.getAccessToken() для получения токена */
+      const accessToken = await super.getAccessToken(); 
+      /** Используем this.config.apiUrl из конфигурации провайдера */
       const response = await fetch(`${this.config.apiUrl}/users/me/labels/UNREAD?fields=messagesUnread`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -166,7 +170,8 @@ export class GmailProvider extends OAuthImplicitFlowProvider implements IHistory
       return labelInfo.messagesUnread || 0;
     } catch (error) {
       console.error(`[${this.config.id}] Error getting total unread count:`, error);
-      return 0; // Возвращаем 0 в случае ошибки, как и в предыдущей реализации.
+      /** Возвращаем 0 в случае ошибки, как и в предыдущей реализации. */
+      return 0; 
     }
   }
 
@@ -178,55 +183,59 @@ export class GmailProvider extends OAuthImplicitFlowProvider implements IHistory
     try {
       console.log(`[${this.config.id}] Starting overridden fetchStoredAccountData for Gmail`);
 
-      // 1. Получаем профиль пользователя (email и, возможно, начальный historyId).
+      /** 1. Получаем профиль пользователя (email и, возможно, начальный historyId). */
       const userProfile = await this.getUserProfile();
       console.log(`[${this.config.id}] User profile received:`, userProfile);
 
-      // 2. Получаем общее количество непрочитанных писем.
+      /** 2. Получаем общее количество непрочитанных писем. */
       const totalUnreadMessages = await this.getUnreadCount();
       console.log(`[${this.config.id}] Total unread messages:`, totalUnreadMessages);
 
-      // 3. Получаем текущий сохраненный historyId из локального хранилища.
+      /** 3. Получаем текущий сохраненный historyId из локального хранилища. */
       const currentLastHistoryId = await this.getLastHistoryId();
       console.log(`[${this.config.id}] Current last history ID from storage:`, currentLastHistoryId);
       
-      // Определяем startHistoryId для getHistory.
-      // Если currentLastHistoryId отсутствует, можно использовать initialHistoryId из профиля.
-      // Gmail API /history требует startHistoryId. Если его нет, getUserProfile возвращает initialHistoryId.
-      // Если currentLastHistoryId пуст, это может быть первая синхронизация.
-      // Для Gmail, если нет currentLastHistoryId, используем тот, что пришел с профилем.
+      /** 
+       * Определяем startHistoryId для getHistory.
+       * Если currentLastHistoryId отсутствует, можно использовать initialHistoryId из профиля.
+       * Gmail API /history требует startHistoryId. Если его нет, getUserProfile возвращает initialHistoryId.
+       * Если currentLastHistoryId пуст, это может быть первая синхронизация.
+       * Для Gmail, если нет currentLastHistoryId, используем тот, что пришел с профилем.
+       */
       const historyStartId = currentLastHistoryId || userProfile.initialHistoryId;
 
-      // 4. Получаем историю сообщений (новые сообщения и новый historyId).
-      // Инициализируем historyResult значениями по умолчанию.
+      /** 4. Получаем историю сообщений (новые сообщения и новый historyId). */
+      /** Инициализируем historyResult значениями по умолчанию. */
       let historyResult: { historyId: string; messages: GmailMessageDetail[] } = { 
         historyId: currentLastHistoryId || userProfile.initialHistoryId || "", 
         messages: [] 
       };
 
-      if (historyStartId) { // Запрашиваем историю только если есть с чего начать.
+      if (historyStartId) { /** Запрашиваем историю только если есть с чего начать. */
          historyResult = await this.getHistory(historyStartId);
          console.log(`[${this.config.id}] History result:`, historyResult);
 
-         // 5. Сохраняем новый historyId, если он изменился.
+         /** 5. Сохраняем новый historyId, если он изменился. */
          if (historyResult.historyId && historyResult.historyId !== currentLastHistoryId) {
            await this.saveLastHistoryId(historyResult.historyId);
            console.log(`[${this.config.id}] Saved new history ID: ${historyResult.historyId}`);
          }
       } else {
         console.warn(`[${this.config.id}] No startHistoryId available (currentLastHistoryId or initialHistoryId). Skipping getHistory.`);
-        // Если historyId отсутствует, historyDetails.lastHistoryId должен оставаться актуальным (т.е. undefined или старым),
-        // а messages будет пустым массивом.
-        historyResult.historyId = currentLastHistoryId || ""; // Устанавливаем в текущий сохраненный ID или пустую строку.
+        /** 
+         * Если historyId отсутствует, historyDetails.lastHistoryId должен оставаться актуальным (т.е. undefined или старым),
+         * а messages будет пустым массивом.
+         */
+        historyResult.historyId = currentLastHistoryId || ""; /** Устанавливаем в текущий сохраненный ID или пустую строку. */
       }
 
-      // 6. Формируем объект StoredAccount.
+      /** 6. Формируем объект StoredAccount. */
       const account: StoredAccount = {
         providerId: this.config.id,
         email: userProfile.email,
         unreadCount: totalUnreadMessages,
         lastUpdated: Date.now(),
-        historyDetails: { // Заполняем поле historyDetails.
+        historyDetails: { /** Заполняем поле historyDetails. */
           lastHistoryId: historyResult.historyId,
           messages: historyResult.messages,
         }
@@ -236,9 +245,11 @@ export class GmailProvider extends OAuthImplicitFlowProvider implements IHistory
       return account;
     } catch (error) {
       console.error(`[${this.config.id}] Error in overridden fetchStoredAccountData for Gmail:`, error);
-      // В случае ошибки, необходимо вернуть StoredAccount с информацией об ошибке или пробросить ошибку дальше.
-      // Для соответствия сигнатуре метода, если необходимо что-то вернуть, это должен быть объект StoredAccount.
-      // Однако, предпочтительнее пробросить ошибку, чтобы вызывающий код мог ее корректно обработать.
+      /**
+       * В случае ошибки, необходимо вернуть StoredAccount с информацией об ошибке или пробросить ошибку дальше.
+       * Для соответствия сигнатуре метода, если необходимо что-то вернуть, это должен быть объект StoredAccount.
+       * Однако, предпочтительнее пробросить ошибку, чтобы вызывающий код мог ее корректно обработать.
+       */
       throw error; 
     }
   }

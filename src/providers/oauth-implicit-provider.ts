@@ -1,5 +1,7 @@
-// src/providers/oauth-implicit-provider.ts
-// Абстрактный класс для провайдеров, использующих OAuth 2.0 Implicit Grant Flow
+/**
+ * Реализация OAuth 2.0 Implicit Grant Flow для провайдеров.
+ * Абстрактный класс для провайдеров, использующих OAuth 2.0 Implicit Grant Flow.
+ */
 import { AuthToken } from '../types';
 import { BaseEmailProvider } from './email-provider';
 import { ProviderConfig } from './provider-configs';
@@ -8,11 +10,11 @@ export abstract class OAuthImplicitFlowProvider extends BaseEmailProvider {
   protected readonly config: ProviderConfig;
 
   constructor(config: ProviderConfig) {
-    super(); // Предполагается, что конструктор BaseEmailProvider не принимает параметров. Измените, если это не так.
+    super(); /** Предполагается, что конструктор BaseEmailProvider не принимает параметров. Измените, если это не так. */
     this.config = config;
   }
 
-  // Реализация абстрактных свойств из BaseEmailProvider
+  /** Реализация абстрактных свойств из BaseEmailProvider */
   get id(): string { return this.config.id; }
   get name(): string { return this.config.name; }
   get iconUrl(): string { return this.config.iconUrl; }
@@ -26,15 +28,17 @@ export abstract class OAuthImplicitFlowProvider extends BaseEmailProvider {
     url.searchParams.append('redirect_uri', redirectUri);
     url.searchParams.append('scope', this.config.scopes.join(' '));
 
-    // Добавляем кастомные параметры авторизации, если они определены в конфигурации
+    /** Добавляем кастомные параметры авторизации, если они определены в конфигурации */
     if (this.config.customAuthParams) {
       for (const [key, value] of Object.entries(this.config.customAuthParams)) {
         url.searchParams.append(key, value);
       }
     }
     
-    // Предыдущие комментарии о специфичных для Gmail/Yandex параметрах здесь больше не актуальны,
-    // так как эта логика теперь управляется через customAuthParams в конфигурации.
+    /**
+     * Предыдущие комментарии о специфичных для Gmail/Yandex параметрах здесь больше не актуальны,
+     * так как эта логика теперь управляется через customAuthParams в конфигурации.
+     */
 
     console.log(`[${this.config.id}] Generated auth URL:`, url.toString());
     console.log(`[${this.config.id}] Redirect URI:`, redirectUri);
@@ -59,7 +63,7 @@ export abstract class OAuthImplicitFlowProvider extends BaseEmailProvider {
       
       const accessToken = hashParams.get('access_token');
       const expiresIn = hashParams.get('expires_in');
-      // const tokenType = hashParams.get('token_type'); // Обычно 'bearer', может не понадобиться
+      /** const tokenType = hashParams.get('token_type'); // Обычно 'bearer', может не понадобиться */
       const error = hashParams.get('error');
 
       if (error) {
@@ -75,7 +79,7 @@ export abstract class OAuthImplicitFlowProvider extends BaseEmailProvider {
       const token: AuthToken = {
         accessToken,
         expiresAt: Date.now() + (parseInt(expiresIn || '3600', 10) * 1000),
-        // refreshToken обычно недоступен в implicit flow
+        /** refreshToken обычно недоступен в implicit flow */
       };
       
       await this.saveToken(token);
@@ -83,7 +87,8 @@ export abstract class OAuthImplicitFlowProvider extends BaseEmailProvider {
       return token;
     } catch (err) {
       console.error(`[${this.config.id}] Authorization error:`, err);
-      throw err; // Повторно выбрасываем ошибку для обработки вызывающим кодом
+      /** Повторно выбрасываем ошибку для обработки вызывающим кодом */
+      throw err; 
     }
   }
 
@@ -96,7 +101,7 @@ export abstract class OAuthImplicitFlowProvider extends BaseEmailProvider {
         return newToken.accessToken;
       }
 
-      // Добавляем небольшой буфер (например, 60 секунд) к проверке срока действия
+      /** Добавляем небольшой буфер (например, 60 секунд) к проверке срока действия */
       if (token.expiresAt <= Date.now() + 60000) { 
         console.log(`[${this.config.id}] Token expired or about to expire, re-authorizing.`);
         const newToken = await this.authorize();
@@ -119,16 +124,19 @@ export abstract class OAuthImplicitFlowProvider extends BaseEmailProvider {
       return isValid;
     } catch (error) {
       console.error(`[${this.config.id}] Error checking authorization:`, error);
-      return false; // По умолчанию не авторизован при ошибке
+      /** По умолчанию не авторизован при ошибке */
+      return false; 
     }
   }
 
   async logout(): Promise<void> {
     console.log(`[${this.config.id}] Logging out`);
     await this.removeToken();
-    // Дополнительно, для некоторых провайдеров, вы можете отозвать токен через API вызов
-    // или перенаправить пользователя на URL выхода. Для implicit flow, удаление сохраненного токена
-    // часто является основным действием на стороне клиента.
+    /**
+     * Дополнительно, для некоторых провайдеров, вы можете отозвать токен через API вызов
+     * или перенаправить пользователя на URL выхода. Для implicit flow, удаление сохраненного токена
+     * часто является основным действием на стороне клиента.
+     */
   }
 
   protected async saveToken(token: AuthToken): Promise<void> {
@@ -147,8 +155,10 @@ export abstract class OAuthImplicitFlowProvider extends BaseEmailProvider {
     await browser.storage.local.remove(this.config.tokenStorageKey);
   }
 
-  // Абстрактные методы getUserProfile и getUnreadCount наследуются от BaseEmailProvider
-  // и должны быть реализованы конкретными подклассами OAuthImplicitFlowProvider.
-  // abstract getUserProfile(): Promise<{ email: string }>; // Уже в BaseEmailProvider
-  // abstract getUnreadCount(): Promise<number>; // Уже в BaseEmailProvider
+  /**
+   * Абстрактные методы getUserProfile и getUnreadCount наследуются от BaseEmailProvider
+   * и должны быть реализованы конкретными подклассами OAuthImplicitFlowProvider.
+   * Метод getUserProfile() наследуется от BaseEmailProvider и должен быть реализован конкретным подклассом.
+   * Метод getUnreadCount() наследуется от BaseEmailProvider и должен быть реализован конкретным подклассом.
+   */
 }
