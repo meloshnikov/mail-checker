@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AppState, ConnectionStatus, MessageType, StoredAccount, GmailMessageDetail, GmailMessageHeader } from '../types';
 
-// Начальное состояние приложения
+/** Начальное состояние приложения */
 const initialState: AppState = {
   accounts: [],
   status: ConnectionStatus.DISCONNECTED,
@@ -15,32 +15,32 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
-  const [viewingMessagesFor, setViewingMessagesFor] = useState<string | null>(null); // Email аккаунта, для которого просматриваются сообщения
+  const [viewingMessagesFor, setViewingMessagesFor] = useState<string | null>(null); /** Email аккаунта, для которого просматриваются сообщения */
 
-  // Эффект для инициализации и подписки на сообщения
+  /** Эффект для инициализации и подписки на сообщения */
   useEffect(() => {
     console.log('App component mounted');
     
-    // Загрузка данных при монтировании
+    /** Загрузка данных при монтировании */
     loadData();
 
-    // Подписка на сообщения от background script
+    /** Подписка на сообщения от background script */
     browser.runtime.onMessage.addListener(handleMessage);
 
-    // Отписка при размонтировании
+    /** Отписка при размонтировании */
     return () => {
       console.log('App component unmounted');
       browser.runtime.onMessage.removeListener(handleMessage);
     };
   }, []);
 
-  // Загрузка данных из storage.local
+  /** Загрузка данных из storage.local */
   const loadData = async () => {
     try {
       console.log('Loading data from storage');
       setLoading(true);
       
-      // Получаем аккаунты из storage.local
+      /** Получаем аккаунты из storage.local */
       const data = await browser.storage.local.get(['accounts', 'settings']);
       console.log('Data loaded from storage:', data);
       
@@ -53,7 +53,7 @@ const App: React.FC = () => {
         settings,
       });
       
-      // Запрашиваем обновление данных
+      /** Запрашиваем обновление данных */
       requestUpdate();
     } catch (err) {
       console.error('Error loading data:', err);
@@ -68,7 +68,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Обработчик сообщений от background script
+  /** Обработчик сообщений от background script */
   const handleMessage = (message: any) => {
     console.log('Message received:', message);
     
@@ -87,7 +87,7 @@ const App: React.FC = () => {
         console.log('Auth complete, payload:', message.payload);
         if (message.payload && message.payload.account) {
           console.log('Account received in AUTH_COMPLETE:', message.payload.account);
-          // Обновляем состояние напрямую с полученным аккаунтом
+          /** Обновляем состояние напрямую с полученным аккаунтом */
           setState({
             ...state,
             accounts: [message.payload.account],
@@ -120,7 +120,7 @@ const App: React.FC = () => {
     return true;
   };
 
-  // Запрос на обновление данных
+  /** Запрос на обновление данных */
   const requestUpdate = () => {
     console.log('Requesting update');
     browser.runtime.sendMessage({
@@ -128,7 +128,7 @@ const App: React.FC = () => {
     });
   };
 
-  // Запрос на авторизацию
+  /** Запрос на авторизацию */
   const handleLogin = (providerId: string = 'gmail') => {
     console.log('Login requested for provider:', providerId);
     setLoading(true);
@@ -142,7 +142,7 @@ const App: React.FC = () => {
     });
   };
 
-  // Запрос на выход из аккаунта
+  /** Запрос на выход из аккаунта */
   const handleLogout = (email?: string) => {
     console.log('Logout requested for email:', email);
     setLoading(true);
@@ -156,7 +156,7 @@ const App: React.FC = () => {
     });
   };
 
-  // Открытие почтового ящика
+  /** Открытие почтового ящика */
   const handleOpenMail = (email: string) => {
     console.log('Opening mail for email:', email);
     
@@ -168,10 +168,10 @@ const App: React.FC = () => {
     });
   };
 
-  // Отображение отладочной информации
+  /** Отображение отладочной информации */
   const toggleDebugInfo = () => {
     if (!debugInfo) {
-      // Собираем отладочную информацию
+      /** Собираем отладочную информацию */
       const info = {
         state,
         redirectURL: browser.identity.getRedirectURL(),
@@ -184,7 +184,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Рендеринг загрузки
+  /** Рендеринг загрузки */
   if (loading) {
     return (
       <div className="container">
@@ -195,7 +195,7 @@ const App: React.FC = () => {
     );
   }
 
-  // Рендеринг состояния без аккаунтов
+  /** Рендеринг состояния без аккаунтов */
   if (state.accounts.length === 0) {
     return (
       <div className="container">
@@ -237,7 +237,7 @@ const App: React.FC = () => {
     );
   }
 
-  // Рендеринг основного интерфейса
+  /** Рендеринг основного интерфейса */
   return (
     <div className="container">
       <div className="header">
@@ -257,10 +257,10 @@ const App: React.FC = () => {
                   account.historyDetails && 
                   account.historyDetails.messages && 
                   account.historyDetails.messages.length > 0) {
-                // Для Gmail с непрочитанными сообщениями, переключаем просмотр сообщений
+                /** Для Gmail с непрочитанными сообщениями, переключаем просмотр сообщений */
                 setViewingMessagesFor(viewingMessagesFor === account.email ? null : account.email);
               } else {
-                // Для других аккаунтов или Gmail без непрочитанных, открываем почту
+                /** Для других аккаунтов или Gmail без непрочитанных, открываем почту */
                 handleOpenMail(account.email);
               }
             }}
@@ -270,7 +270,7 @@ const App: React.FC = () => {
               <span className="account-unread">{account.unreadCount}</span>
             </div>
 
-            {/* Список непрочитанных сообщений для Gmail */}
+            {/** Список непрочитанных сообщений для Gmail */}
             {account.providerId === 'gmail' && 
              viewingMessagesFor === account.email && 
              account.historyDetails && 
@@ -278,7 +278,7 @@ const App: React.FC = () => {
              account.historyDetails.messages.length > 0 && (
               <ul className="message-list">
                 {account.historyDetails.messages.map((message: GmailMessageDetail) => { 
-                  // Извлекаем отправителя и тему из заголовков
+                  /** Извлекаем отправителя и тему из заголовков */
                   const fromHeader = message.payload.headers.find((header: GmailMessageHeader) => header.name === 'From');
                   const subjectHeader = message.payload.headers.find((header: GmailMessageHeader) => header.name === 'Subject');
 
