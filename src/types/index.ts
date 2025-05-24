@@ -24,7 +24,7 @@ export interface GmailMessagePart {
   headers: GmailMessageHeader[];
   body: {
     size: number;
-    data?: string; // Base64Url encoded data
+    data?: string; // Данные в кодировке Base64Url
   };
   parts?: GmailMessagePart[]; // Для multipart сообщений
 }
@@ -36,7 +36,7 @@ export interface GmailMessagePayload {
   headers: GmailMessageHeader[];
   body: {
     size: number;
-    data?: string; // Base64Url encoded data
+    data?: string; // Данные в кодировке Base64Url
   };
   parts?: GmailMessagePart[];
 }

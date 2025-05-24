@@ -1,4 +1,4 @@
-// src/providers/provider-configs.ts
+// Конфигурации для провайдеров электронной почты
 // Файл конфигураций для различных провайдеров электронной почты
 
 export interface ProviderConfig {

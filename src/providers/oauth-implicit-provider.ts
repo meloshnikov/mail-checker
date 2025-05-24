@@ -1,4 +1,4 @@
-// src/providers/oauth-implicit-provider.ts
+// Реализация OAuth 2.0 Implicit Grant Flow для провайдеров
 // Абстрактный класс для провайдеров, использующих OAuth 2.0 Implicit Grant Flow
 import { AuthToken } from '../types';
 import { BaseEmailProvider } from './email-provider';
@@ -149,6 +149,6 @@ export abstract class OAuthImplicitFlowProvider extends BaseEmailProvider {
 
   // Абстрактные методы getUserProfile и getUnreadCount наследуются от BaseEmailProvider
   // и должны быть реализованы конкретными подклассами OAuthImplicitFlowProvider.
-  // abstract getUserProfile(): Promise<{ email: string }>; // Уже в BaseEmailProvider
-  // abstract getUnreadCount(): Promise<number>; // Уже в BaseEmailProvider
+  // Метод getUserProfile() наследуется от BaseEmailProvider и должен быть реализован конкретным подклассом.
+  // Метод getUnreadCount() наследуется от BaseEmailProvider и должен быть реализован конкретным подклассом.
 }

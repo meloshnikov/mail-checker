@@ -146,7 +146,6 @@ export abstract class BaseEmailProvider implements EmailProvider {
  * Фабрика для создания провайдеров электронной почты
  */
 export class EmailProviderFactory {
-  private static providers: Map<string, EmailProvider> = new Map();
   
   /**
    * Регистрация провайдера

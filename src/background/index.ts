@@ -175,14 +175,14 @@ async function updateAllAccounts(): Promise<StoredAccount[]> {
       console.log(`Fetching stored account data for ${account.email} using provider ${provider.id}`);
       const updatedAccount: StoredAccount = await provider.fetchStoredAccountData();
       
-      // Provider-specific logic like saving lastHistoryId is now handled within the provider's fetchStoredAccountData.
-      // No need for specific checks or calls like gmailProvider.saveLastHistoryId() here.
+      // Специфичная для провайдера логика, такая как сохранение lastHistoryId, теперь обрабатывается в fetchStoredAccountData.
+      // Здесь не нужны специальные проверки или вызовы вроде gmailProvider.saveLastHistoryId().
 
       updatedAccounts.push(updatedAccount);
 
     } catch (error) {
       console.error(`Error updating account ${account.email}:`, error);
-      // If an error occurs, keep the original account data
+      // В случае ошибки сохраняем исходные данные аккаунта
       updatedAccounts.push(account);
     }
   }
